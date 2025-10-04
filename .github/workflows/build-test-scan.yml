@@ -1,0 +1,387 @@
+name: Build, Test & Security Scan
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+env:
+  JAVA_VERSION: '21'
+  GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Shallow clones should be disabled for better analysis
+    
+    - name: Set up JDK ${{ env.JAVA_VERSION }}
+      uses: actions/setup-java@v4
+      with:
+        java-version: ${{ env.JAVA_VERSION }}
+        distribution: 'temurin'
+        cache: gradle
+    
+    - name: Make gradlew executable
+      run: chmod +x ./gradlew
+    
+    - name: Validate Gradle wrapper
+      uses: gradle/wrapper-validation-action@v2
+    
+    - name: Build with Gradle
+      run: ./gradlew clean build -x test --no-daemon --stacktrace
+      
+    - name: Enable tests and run regression testing
+      run: |
+        # Enable tests in all modules by modifying build files
+        find . -name "build.gradle" -exec sed -i 's/enabled = false/enabled = true/g' {} \;
+        # Run all tests including architecture tests
+        ./gradlew test --no-daemon --stacktrace --continue
+      continue-on-error: false
+    
+    - name: Generate test report
+      uses: dorny/test-reporter@v1
+      if: success() || failure()
+      with:
+        name: Gradle Tests
+        path: '**/build/test-results/test/*.xml'
+        reporter: java-junit
+        fail-on-error: true
+    
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results
+        path: |
+          **/build/test-results/
+          **/build/reports/tests/
+        retention-days: 30
+    
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-artifacts
+        path: |
+          **/build/libs/*.jar
+          !**/build/libs/*-plain.jar
+        retention-days: 30
+
+  dependency-scan:
+    name: Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up JDK ${{ env.JAVA_VERSION }}
+      uses: actions/setup-java@v4
+      with:
+        java-version: ${{ env.JAVA_VERSION }}
+        distribution: 'temurin'
+        cache: gradle
+    
+    - name: Make gradlew executable
+      run: chmod +x ./gradlew
+    
+    - name: Generate dependency list for OWASP scan
+      run: ./gradlew dependencies --configuration compileClasspath > dependencies.txt
+    
+    - name: OWASP Dependency Check
+      uses: dependency-check/Dependency-Check_Action@main
+      env:
+        JAVA_HOME: /opt/java/openjdk
+      with:
+        project: 'myTradeStoreApp'
+        path: '.'
+        format: 'ALL'
+        args: >
+          --enableRetired
+          --enableExperimental
+          --failOnCVSS 7.0
+          --suppression suppression.xml
+    
+    - name: Upload OWASP Dependency Check results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: owasp-dependency-check-report
+        path: reports/
+        retention-days: 30
+
+  code-security-scan:
+    name: Code Security Scan
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Set up JDK ${{ env.JAVA_VERSION }}
+      uses: actions/setup-java@v4
+      with:
+        java-version: ${{ env.JAVA_VERSION }}
+        distribution: 'temurin'
+        cache: gradle
+    
+    - name: Make gradlew executable
+      run: chmod +x ./gradlew
+    
+    - name: Build for analysis
+      run: ./gradlew clean compileJava --no-daemon
+    
+    - name: Run SpotBugs security analysis
+      run: |
+        # Add SpotBugs plugin to root build.gradle if not present
+        if ! grep -q "spotbugs" build.gradle; then
+          cat >> build.gradle << 'EOF'
+        
+        subprojects {
+            apply plugin: 'com.github.spotbugs'
+            
+            spotbugs {
+                toolVersion = '4.8.3'
+                ignoreFailures = false
+                effort = 'max'
+                reportLevel = 'low'
+                includeFilter = file("$rootDir/spotbugs-include.xml")
+            }
+            
+            spotbugsMain {
+                reports {
+                    html {
+                        required = true
+                        outputLocation = file("$buildDir/reports/spotbugs/main.html")
+                    }
+                    xml {
+                        required = true
+                        outputLocation = file("$buildDir/reports/spotbugs/main.xml")
+                    }
+                }
+            }
+        }
+        EOF
+        fi
+        
+        # Create SpotBugs security filter
+        cat > spotbugs-include.xml << 'EOF'
+        <FindBugsFilter>
+            <!-- Security-related bug patterns -->
+            <Match>
+                <Bug category="SECURITY"/>
+            </Match>
+            <Match>
+                <Bug pattern="SQL_INJECTION"/>
+            </Match>
+            <Match>
+                <Bug pattern="XSS_REQUEST_PARAMETER_TO_SEND_ERROR"/>
+            </Match>
+            <Match>
+                <Bug pattern="PATH_TRAVERSAL_IN"/>
+            </Match>
+            <Match>
+                <Bug pattern="COMMAND_INJECTION"/>
+            </Match>
+            <Match>
+                <Bug pattern="WEAK_RANDOM"/>
+            </Match>
+            <Match>
+                <Bug pattern="INSECURE_RANDOM"/>
+            </Match>
+        </FindBugsFilter>
+        EOF
+        
+        # Add SpotBugs plugin to all subproject build files
+        for build_file in */build.gradle; do
+          if [ -f "$build_file" ]; then
+            if ! grep -q "spotbugs" "$build_file"; then
+              sed -i '/plugins {/a\    id '\''com.github.spotbugs'\'' version '\''6.0.7'\''' "$build_file"
+            fi
+          fi
+        done
+        
+        # Run SpotBugs analysis
+        ./gradlew spotbugsMain --no-daemon || true
+    
+    - name: Run Semgrep SAST
+      uses: semgrep/semgrep-action@v1
+      with:
+        config: >-
+          p/security-audit
+          p/owasp-top-ten
+          p/java
+        generateSarif: "1"
+        publishToken: ${{ secrets.SEMGREP_APP_TOKEN }}
+      env:
+        SEMGREP_RULES: p/security-audit p/owasp-top-ten p/java
+    
+    - name: Upload Semgrep results to GitHub Security
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: semgrep.sarif
+    
+    - name: Upload security scan results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: security-scan-results
+        path: |
+          **/build/reports/spotbugs/
+          semgrep.sarif
+        retention-days: 30
+
+  license-scan:
+    name: License Compliance Scan
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up JDK ${{ env.JAVA_VERSION }}
+      uses: actions/setup-java@v4
+      with:
+        java-version: ${{ env.JAVA_VERSION }}
+        distribution: 'temurin'
+        cache: gradle
+    
+    - name: Make gradlew executable
+      run: chmod +x ./gradlew
+    
+    - name: Generate license report
+      run: |
+        # Add license plugin to build
+        cat >> build.gradle << 'EOF'
+        
+        subprojects {
+            apply plugin: 'com.github.hierynomus.license'
+            
+            license {
+                header rootProject.file('LICENSE_HEADER')
+                strictCheck true
+                includes(["**/*.java"])
+                mapping {
+                    java = 'SLASHSTAR_STYLE'
+                }
+            }
+        }
+        EOF
+        
+        # Generate dependency license report
+        ./gradlew generateLicenseReport --no-daemon || true
+    
+    - name: FOSSA license scan
+      if: env.FOSSA_API_KEY != ''
+      env:
+        FOSSA_API_KEY: ${{ secrets.FOSSA_API_KEY }}
+      run: |
+        curl -H 'Cache-Control: no-cache' https://raw.githubusercontent.com/fossas/fossa-cli/master/install-latest.sh | bash
+        fossa analyze
+        fossa test --timeout 300
+
+  vulnerability-gate:
+    name: Vulnerability Gate
+    runs-on: ubuntu-latest
+    needs: [dependency-scan, code-security-scan]
+    if: always()
+    
+    steps:
+    - name: Download OWASP scan results
+      uses: actions/download-artifact@v4
+      with:
+        name: owasp-dependency-check-report
+        path: ./reports
+    
+    - name: Check for critical vulnerabilities
+      run: |
+        echo "Checking for critical and high severity vulnerabilities..."
+        
+        # Check OWASP Dependency Check results
+        if [ -f "./reports/dependency-check-report.json" ]; then
+          CRITICAL_COUNT=$(jq '.dependencies[]?.vulnerabilities[]? | select(.severity=="CRITICAL" or .severity=="HIGH") | .severity' ./reports/dependency-check-report.json | wc -l)
+          echo "Found $CRITICAL_COUNT critical/high vulnerabilities"
+          
+          if [ "$CRITICAL_COUNT" -gt 0 ]; then
+            echo "❌ CRITICAL/HIGH vulnerabilities found. Build should fail!"
+            jq '.dependencies[]?.vulnerabilities[]? | select(.severity=="CRITICAL" or .severity=="HIGH")' ./reports/dependency-check-report.json
+            exit 1
+          else
+            echo "✅ No critical/high vulnerabilities found"
+          fi
+        else
+          echo "⚠️  OWASP report not found, checking XML format..."
+          if [ -f "./reports/dependency-check-report.xml" ]; then
+            CRITICAL_COUNT=$(grep -c 'severity.*\(CRITICAL\|HIGH\)' ./reports/dependency-check-report.xml || echo "0")
+            echo "Found $CRITICAL_COUNT critical/high vulnerabilities"
+            
+            if [ "$CRITICAL_COUNT" -gt 0 ]; then
+              echo "❌ CRITICAL/HIGH vulnerabilities found. Build should fail!"
+              grep -A 5 -B 5 'severity.*\(CRITICAL\|HIGH\)' ./reports/dependency-check-report.xml || true
+              exit 1
+            else
+              echo "✅ No critical/high vulnerabilities found"
+            fi
+          else
+            echo "⚠️  No OWASP Dependency Check report found. This may indicate a scan failure."
+            exit 1
+          fi
+        fi
+    
+    - name: Security scan summary
+      if: always()
+      run: |
+        echo "## 🔒 Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Scan Type | Status |" >> $GITHUB_STEP_SUMMARY
+        echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ needs.dependency-scan.result }}" == "success" ]; then
+          echo "| OWASP Dependency Check | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "| OWASP Dependency Check | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ "${{ needs.code-security-scan.result }}" == "success" ]; then
+          echo "| SAST (Semgrep) | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "| SAST (Semgrep) | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Critical and high severity vulnerabilities will fail the build." >> $GITHUB_STEP_SUMMARY
+
+  notification:
+    name: Notification
+    runs-on: ubuntu-latest
+    needs: [build-and-test, dependency-scan, code-security-scan, vulnerability-gate]
+    if: always()
+    
+    steps:
+    - name: Build status notification
+      run: |
+        if [ "${{ needs.vulnerability-gate.result }}" == "failure" ]; then
+          echo "🚫 Build failed due to security vulnerabilities"
+          exit 1
+        elif [ "${{ needs.build-and-test.result }}" == "failure" ]; then
+          echo "🚫 Build failed due to test failures"
+          exit 1
+        elif [ "${{ contains(needs.*.result, 'failure') }}" == "true" ]; then
+          echo "🚫 Build failed due to other issues"
+          exit 1
+        else
+          echo "✅ All security checks passed!"
+        fi

@@ -1,9 +1,73 @@
 plugins {
     id 'com.diffplug.spotless' version '6.25.0' apply false
+    id 'org.owasp.dependencycheck' version '10.0.4' apply false
+    id 'com.github.spotbugs' version '6.0.7' apply false
 }
 
 allprojects {
 	repositories {
 		mavenCentral()
 	}
+}
+
+// Configure OWASP Dependency Check for all subprojects
+subprojects {
+    apply plugin: 'org.owasp.dependencycheck'
+    
+    dependencyCheck {
+        autoUpdate = true
+        analyzers {
+            // Enable additional analyzers
+            experimentalEnabled = true
+            retirementEnabled = true
+            bundleAuditEnabled = false // Not needed for Java projects
+            assemblyEnabled = false   // Not needed for Java projects
+        }
+        
+        format = 'ALL' // HTML, JSON, CSV, XML
+        outputDirectory = "${buildDir}/reports/owasp"
+        
+        // Fail build on CVSS score >= 7.0 (HIGH and CRITICAL)
+        failBuildOnCVSS = 7.0
+        
+        // Suppression file for false positives
+        suppressionFile = "${rootProject.projectDir}/suppression.xml"
+        
+        // Skip test dependencies to reduce noise
+        skipTestGroups = true
+        
+        data {
+            directory = "${rootProject.buildDir}/dependency-check-data"
+        }
+    }
+}
+
+// Global configuration for security scanning
+configure(subprojects.findAll { it.name != 'architecture-tests' }) {
+    apply plugin: 'com.github.spotbugs'
+    
+    spotbugs {
+        toolVersion = '4.8.3'
+        ignoreFailures = false
+        effort = 'max'
+        reportLevel = 'medium'
+        includeFilter = file("${rootProject.projectDir}/spotbugs-security.xml")
+    }
+    
+    spotbugsMain {
+        reports {
+            html {
+                required = true
+                outputLocation = file("${buildDir}/reports/spotbugs/main.html")
+                stylesheet = 'fancy-hist.xsl'
+            }
+            xml {
+                required = true
+                outputLocation = file("${buildDir}/reports/spotbugs/main.xml")
+            }
+        }
+    }
+    
+    // Ensure SpotBugs runs after compilation
+    spotbugsMain.dependsOn compileJava
 }

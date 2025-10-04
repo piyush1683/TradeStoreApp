@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+    <!-- Security-focused bug patterns for SpotBugs -->
+    
+    <!-- SQL Injection vulnerabilities -->
+    <Match>
+        <Bug pattern="SQL_NONCONSTANT_STRING_PASSED_TO_EXECUTE"/>
+    </Match>
+    <Match>
+        <Bug pattern="SQL_PREPARED_STATEMENT_GENERATED_FROM_NONCONSTANT_STRING"/>
+    </Match>
+    
+    <!-- Cross-Site Scripting (XSS) -->
+    <Match>
+        <Bug pattern="XSS_REQUEST_PARAMETER_TO_SEND_ERROR"/>
+    </Match>
+    <Match>
+        <Bug pattern="XSS_REQUEST_PARAMETER_TO_SERVLET_WRITER"/>
+    </Match>
+    <Match>
+        <Bug pattern="XSS_REQUEST_PARAMETER_TO_JSP_WRITER"/>
+    </Match>
+    
+    <!-- Path Traversal -->
+    <Match>
+        <Bug pattern="PATH_TRAVERSAL_IN"/>
+    </Match>
+    <Match>
+        <Bug pattern="PATH_TRAVERSAL_OUT"/>
+    </Match>
+    
+    <!-- Command Injection -->
+    <Match>
+        <Bug pattern="COMMAND_INJECTION"/>
+    </Match>
+    
+    <!-- Weak Cryptography -->
+    <Match>
+        <Bug pattern="WEAK_FILENAMEUTILS"/>
+    </Match>
+    <Match>
+        <Bug pattern="WEAK_MESSAGE_DIGEST_MD5"/>
+    </Match>
+    <Match>
+        <Bug pattern="WEAK_MESSAGE_DIGEST_SHA1"/>
+    </Match>
+    <Match>
+        <Bug pattern="CIPHER_INTEGRITY"/>
+    </Match>
+    <Match>
+        <Bug pattern="RSA_NO_PADDING"/>
+    </Match>
+    <Match>
+        <Bug pattern="RSA_KEY_SIZE"/>
+    </Match>
+    <Match>
+        <Bug pattern="BLOWFISH_KEY_SIZE"/>
+    </Match>
+    <Match>
+        <Bug pattern="DES_USAGE"/>
+    </Match>
+    
+    <!-- Random Number Generation -->
+    <Match>
+        <Bug pattern="PREDICTABLE_RANDOM"/>
+    </Match>
+    <Match>
+        <Bug pattern="INSECURE_RANDOM"/>
+    </Match>
+    
+    <!-- Trust Boundary Violations -->
+    <Match>
+        <Bug pattern="TRUST_BOUNDARY_VIOLATION"/>
+    </Match>
+    
+    <!-- Cookie Security -->
+    <Match>
+        <Bug pattern="COOKIE_USAGE"/>
+    </Match>
+    <Match>
+        <Bug pattern="HTTPONLY_COOKIE"/>
+    </Match>
+    <Match>
+        <Bug pattern="INSECURE_COOKIE"/>
+    </Match>
+    
+    <!-- Hard-coded sensitive data -->
+    <Match>
+        <Bug pattern="HARD_CODE_PASSWORD"/>
+    </Match>
+    <Match>
+        <Bug pattern="HARD_CODE_KEY"/>
+    </Match>
+    
+    <!-- LDAP Injection -->
+    <Match>
+        <Bug pattern="LDAP_INJECTION"/>
+    </Match>
+    
+    <!-- XML vulnerabilities -->
+    <Match>
+        <Bug pattern="XXE_SAXPARSER"/>
+    </Match>
+    <Match>
+        <Bug pattern="XXE_XMLREADER"/>
+    </Match>
+    <Match>
+        <Bug pattern="XXE_DOCUMENT"/>
+    </Match>
+    
+    <!-- File system security -->
+    <Match>
+        <Bug pattern="PT_ABSOLUTE_PATH_TRAVERSAL"/>
+    </Match>
+    <Match>
+        <Bug pattern="PT_RELATIVE_PATH_TRAVERSAL"/>
+    </Match>
+    
+    <!-- Deserialization -->
+    <Match>
+        <Bug pattern="OBJECT_DESERIALIZATION"/>
+    </Match>
+    
+    <!-- HTTP Header Injection -->
+    <Match>
+        <Bug pattern="HTTP_RESPONSE_SPLITTING"/>
+    </Match>
+    
+    <!-- SSL/TLS Security -->
+    <Match>
+        <Bug pattern="WEAK_HOSTNAME_VERIFIER"/>
+    </Match>
+    <Match>
+        <Bug pattern="WEAK_TRUST_MANAGER"/>
+    </Match>
+    
+    <!-- Information Disclosure -->
+    <Match>
+        <Bug pattern="INFORMATION_EXPOSURE_THROUGH_AN_ERROR_MESSAGE"/>
+    </Match>
+    
+    <!-- Include all security-category bugs -->
+    <Match>
+        <Bug category="SECURITY"/>
+    </Match>
+    
+    <!-- Include malicious code detection -->
+    <Match>
+        <Bug category="MALICIOUS_CODE"/>
+    </Match>
+    
+</FindBugsFilter>
