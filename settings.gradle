@@ -1,0 +1,9 @@
+pluginManagement {
+	repositories {
+		maven { url = 'https://repo.spring.io/snapshot' }
+		gradlePluginPortal()
+	}
+}
+rootProject.name = 'myTradeStoreApp'
+include 'trade-common', 'trade-ingestion', 'trade-capture', 'trade-validation-storage'
+include 'architecture-tests'

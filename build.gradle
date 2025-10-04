@@ -1,0 +1,128 @@
+plugins {
+    id 'com.diffplug.spotless' version '6.25.0' apply false
+}
+
+allprojects {
+	repositories {
+		mavenCentral()
+	}
+}
+
+// Task to run all services
+task runAllServices {
+    group = 'application'
+    description = 'Run all microservices'
+    
+    doLast {
+        println "Starting all Trade Store microservices..."
+        println "Services will run on ports:"
+        println "- Trade Ingestion: http://localhost:8081"
+        println "- Trade Capture: http://localhost:8082" 
+        println "- Trade Validation & Storage: http://localhost:8083"
+        println "- Trade Expiry: http://localhost:8084"
+        println ""
+        println "Use Ctrl+C to stop all services"
+    }
+}
+
+// Individual service tasks
+task runIngestion {
+    group = 'application'
+    description = 'Run Trade Ingestion Service on port 8081'
+    doLast {
+        println "Starting Trade Ingestion Service on port 8081..."
+        println "Run: ./gradlew :trade-ingestion:bootRun --args=--server.port=8081"
+    }
+}
+
+task runCapture {
+    group = 'application' 
+    description = 'Run Trade Capture Service on port 8082'
+    doLast {
+        println "Starting Trade Capture Service on port 8082..."
+        println "Run: ./gradlew :trade-capture:bootRun --args=--server.port=8082"
+    }
+}
+
+task runValidation {
+    group = 'application'
+    description = 'Run Trade Validation & Storage Service on port 8083'
+    doLast {
+        println "Starting Trade Validation & Storage Service on port 8083..."
+        println "Run: ./gradlew :trade-validation-storage:bootRun --args=--server.port=8083"
+    }
+}
+
+task runExpiry {
+    group = 'application'
+    description = 'Run Trade Expiry Service on port 8084'
+    doLast {
+        println "Starting Trade Expiry Service on port 8084..."
+        println "Run: ./gradlew :trade-expiry:bootRun --args=--server.port=8084"
+    }
+}
+
+// Parallel execution task
+task runAllServicesParallel {
+    group = 'application'
+    description = 'Run all microservices in parallel'
+    
+    doLast {
+        println "Starting all Trade Store microservices in parallel..."
+        println "Services will run on ports:"
+        println "- Trade Ingestion: http://localhost:8081"
+        println "- Trade Capture: http://localhost:8082" 
+        println "- Trade Validation & Storage: http://localhost:8083"
+        println "- Trade Expiry: http://localhost:8084"
+        println ""
+        println "Run these commands in separate terminal windows:"
+        println ""
+        println "Terminal 1: ./gradlew :trade-ingestion:bootRun --args=--server.port=8081"
+        println "Terminal 2: ./gradlew :trade-capture:bootRun --args=--server.port=8082"
+        println "Terminal 3: ./gradlew :trade-validation-storage:bootRun --args=--server.port=8083"
+        println "Terminal 4: ./gradlew :trade-expiry:bootRun --args=--server.port=8084"
+        println ""
+        println "Or use the individual tasks:"
+        println "./gradlew runIngestion"
+        println "./gradlew runCapture"
+        println "./gradlew runValidation"
+        println "./gradlew runExpiry"
+    }
+}
+
+// Single command to run all services
+task runAll {
+    group = 'application'
+    description = 'Run all microservices with one command'
+    
+    doLast {
+        println "Starting all Trade Store microservices..."
+        println "Services will run on ports:"
+        println "- Trade Ingestion: http://localhost:8081"
+        println "- Trade Capture: http://localhost:8082" 
+        println "- Trade Validation & Storage: http://localhost:8083"
+        println "- Trade Expiry: http://localhost:8084"
+        println ""
+        println "Starting services in separate windows..."
+        
+        // Start all services in parallel using Windows start command
+        project.exec {
+            commandLine 'cmd', '/c', 'start', 'cmd', '/k', 'gradlew :trade-ingestion:bootRun --args=--server.port=8081'
+        }
+        
+        project.exec {
+            commandLine 'cmd', '/c', 'start', 'cmd', '/k', 'gradlew :trade-capture:bootRun --args=--server.port=8082'
+        }
+        
+        project.exec {
+            commandLine 'cmd', '/c', 'start', 'cmd', '/k', 'gradlew :trade-validation-storage:bootRun --args=--server.port=8083'
+        }
+        
+        project.exec {
+            commandLine 'cmd', '/c', 'start', 'cmd', '/k', 'gradlew :trade-expiry:bootRun --args=--server.port=8084'
+        }
+        
+        println "All services started in separate windows!"
+        println "Close the individual command windows to stop each service."
+    }
+}
