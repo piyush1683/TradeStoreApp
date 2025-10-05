@@ -1,0 +1,55 @@
+name: OSV Scan
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  osv-scan:
+    name: Run OSV-Scanner
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install OSV-Scanner
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/google/osv-scanner/main/scripts/install.sh \
+            | sh -s -- -b /usr/local/bin
+          osv-scanner --version
+
+      - name: Prepare Gradle project (best effort)
+        run: |
+          if [ -f gradlew ]; then
+            chmod +x gradlew
+            ./gradlew --version
+            # Attempt to generate lockfiles to improve scan accuracy; ignore failures
+            ./gradlew dependencies --write-locks || true
+          fi
+
+      - name: Run OSV-Scanner recursively and output SARIF
+        run: |
+          # Do not fail the pipeline on findings; we upload SARIF to Security tab
+          osv-scanner -r . --skip-git --format sarif -o osv-results.sarif || true
+
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: osv-results.sarif
+          category: OSV-Scanner
+
+      - name: Upload OSV results artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: osv-results
+          path: |
+            osv-results.sarif
