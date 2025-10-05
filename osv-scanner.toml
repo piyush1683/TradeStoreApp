@@ -1,0 +1,23 @@
+# OSV-Scanner configuration file
+# https://google.github.io/osv-scanner/configuration/
+
+# Scan configuration
+[scan]
+# Skip directories that are not relevant for vulnerability scanning
+skip_git = true
+
+# Package scanning configuration
+[experimental.licenses]
+# Enable license scanning (optional)
+summary = false
+
+# Ignore vulnerabilities (add specific CVEs here if needed)
+# Example:
+# [[IgnoredVulns]]
+# id = "CVE-2022-12345"
+# reason = "This vulnerability does not affect our usage"
+
+# Configure output format
+[output]
+# Default format is table, but can also be json, sarif
+format = "table"
